@@ -1,0 +1,2 @@
+source D:/Projects/esp32_blinky/build/bootloader/gdbinit/symbols
+source D:/Projects/esp32_blinky/build/bootloader/gdbinit/connect
