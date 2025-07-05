@@ -30,12 +30,15 @@ static led_strip_handle_t led_strip;
 static void blink_led(void)
 {
     /* If the addressable LED is enabled */
-    if (s_led_state) {
+    if (s_led_state)
+    {
         /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
-        led_strip_set_pixel(led_strip, 0, 16, 16, 16);
+        led_strip_set_pixel(led_strip, 0, 5, 5, 5);
         /* Refresh the strip to send data */
         led_strip_refresh(led_strip);
-    } else {
+    }
+    else
+    {
         /* Set all LED off to clear all pixels */
         led_strip_clear(led_strip);
     }
@@ -94,7 +97,8 @@ void app_main(void)
     /* Configure the peripheral according to the LED type */
     configure_led();
 
-    while (1) {
+    while (1)
+    {
         ESP_LOGI(TAG, "Turning the LED %s!", s_led_state == true ? "ON" : "OFF");
         blink_led();
         /* Toggle the LED state */
