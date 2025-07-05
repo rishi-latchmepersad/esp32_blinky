@@ -13,36 +13,21 @@
 #include "esp_log.h"
 #include "led_strip.h"
 #include "sdkconfig.h"
+#include "freertos/semphr.h"
 
 static const char *TAG = "example";
-
+SemaphoreHandle_t led_semaphore;
 /* Use project configuration menu (idf.py menuconfig) to choose the GPIO to blink,
    or you can edit the following line and set a number here.
 */
 #define BLINK_GPIO CONFIG_BLINK_GPIO
 
-static uint8_t s_led_state = 0;
+static uint8_t s_white_led_state = 0;
+static uint8_t s_blue_led_state = 0;
 
 #ifdef CONFIG_BLINK_LED_STRIP
 
 static led_strip_handle_t led_strip;
-
-static void blink_led(void)
-{
-    /* If the addressable LED is enabled */
-    if (s_led_state)
-    {
-        /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
-        led_strip_set_pixel(led_strip, 0, 5, 5, 5);
-        /* Refresh the strip to send data */
-        led_strip_refresh(led_strip);
-    }
-    else
-    {
-        /* Set all LED off to clear all pixels */
-        led_strip_clear(led_strip);
-    }
-}
 
 static void configure_led(void)
 {
@@ -76,7 +61,7 @@ static void configure_led(void)
 static void blink_led(void)
 {
     /* Set the GPIO level according to the state (LOW or HIGH)*/
-    gpio_set_level(BLINK_GPIO, s_led_state);
+    gpio_set_level(BLINK_GPIO, s_white_led_state);
 }
 
 static void configure_led(void)
@@ -91,18 +76,99 @@ static void configure_led(void)
 #error "unsupported LED type"
 #endif
 
-void app_main(void)
+void blink_white_led()
 {
+    ESP_LOGI(TAG, "Turning the white LED %s!", s_white_led_state == true ? "ON" : "OFF");
+    /* If the addressable LED is enabled */
+    if (s_white_led_state)
+    {
+        /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
+        led_strip_set_pixel(led_strip, 0, 5, 5, 5);
+        /* Refresh the strip to send data */
+        led_strip_refresh(led_strip);
+    }
+    else
+    {
+        /* Set all LED off to clear all pixels */
+        led_strip_clear(led_strip);
+    }
+    /* Toggle the LED state */
+    s_white_led_state = !s_white_led_state;
+}
 
-    /* Configure the peripheral according to the LED type */
-    configure_led();
+void blink_blue_led()
+{
+    /* If the addressable LED is enabled */
+    if (s_blue_led_state)
+    {
+        /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
+        led_strip_set_pixel(led_strip, 0, 0, 0, 5);
+        /* Refresh the strip to send data */
+        led_strip_refresh(led_strip);
+    }
+    else
+    {
+        /* Set all LED off to clear all pixels */
+        led_strip_clear(led_strip);
+    }
+    /* Toggle the LED state */
+    s_blue_led_state = !s_blue_led_state;
+}
+void blink_led_white_task(void *pvParameters)
+{
+    ESP_LOGI(TAG, "Starting the blink led white task!");
+    while (1)
+    {
+        xSemaphoreTake(led_semaphore, portMAX_DELAY);
+        blink_white_led();
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        blink_white_led();
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        xSemaphoreGive(led_semaphore);
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+    }
+}
+
+void blink_led_blue_task(void *pvParameters)
+{
+    ESP_LOGI(TAG, "Starting the blink led blue task!");
 
     while (1)
     {
-        ESP_LOGI(TAG, "Turning the LED %s!", s_led_state == true ? "ON" : "OFF");
-        blink_led();
-        /* Toggle the LED state */
-        s_led_state = !s_led_state;
-        vTaskDelay(CONFIG_BLINK_PERIOD / portTICK_PERIOD_MS);
+        ESP_LOGI(TAG, "Turning the blue LED %s!", s_blue_led_state == true ? "ON" : "OFF");
+        xSemaphoreTake(led_semaphore, portMAX_DELAY);
+        blink_blue_led();
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        blink_blue_led();
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        xSemaphoreGive(led_semaphore);
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
     }
+}
+void app_main(void)
+{
+    // set up a semaphore to share the one RGB LED
+    led_semaphore = xSemaphoreCreateBinary();
+    if (led_semaphore == NULL)
+    {
+        ESP_LOGI(TAG, "Failed to create semaphore");
+    }
+    xSemaphoreGive(led_semaphore);
+    /* Configure the peripheral according to the LED type */
+    configure_led();
+    xTaskCreate(blink_led_white_task, "blink_led_white_task", 2048, NULL, 1, NULL);
+    xTaskCreate(blink_led_blue_task, "blink_led_blue_task", 2048, NULL, 1, NULL);
+
+    /*
+     * Print task list for debug */
+    //  Buffer to hold task list (large enough to fit output)
+    char task_list_buffer[2048];
+
+    // Get and print task list
+    printf("Task List:\n");
+    printf("Name         State  Priority  Stack  Num\n");
+    printf("-----------------------------------------\n");
+
+    vTaskList(task_list_buffer);
+    printf("%s\n", task_list_buffer);
 }

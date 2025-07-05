@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "blink",
-    "project_version":    "5dbcfcc-dirty",
+    "project_version":    "3897ebd-dirty",
     "project_path":       "D:/Projects/esp32_blinky",
     "idf_path":           "C:/Espressif/v5.4.2/esp-idf",
     "build_dir":          "D:/Projects/esp32_blinky/build",
