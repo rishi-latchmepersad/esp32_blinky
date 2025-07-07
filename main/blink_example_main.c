@@ -145,6 +145,28 @@ void blink_led_blue_task(void *pvParameters)
         vTaskDelay(2000 / portTICK_PERIOD_MS);
     }
 }
+
+void button_task(void *pvParameters)
+{
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << GPIO_NUM_9),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE};
+    gpio_config(&io_conf);
+
+    while (1)
+    {
+        int level = gpio_get_level(GPIO_NUM_9);
+        if (level == 0)
+        { // button is pressed
+            ESP_LOGI(TAG, "Button pressed!");
+        }
+        vTaskDelay(150 / portTICK_PERIOD_MS); // debounce delay
+    }
+}
+
 void app_main(void)
 {
     // set up a semaphore to share the one RGB LED
@@ -158,7 +180,7 @@ void app_main(void)
     configure_led();
     xTaskCreate(blink_led_white_task, "blink_led_white_task", 2048, NULL, 1, NULL);
     xTaskCreate(blink_led_blue_task, "blink_led_blue_task", 2048, NULL, 1, NULL);
-
+    xTaskCreate(button_task, "button_task", 2048, NULL, 1, NULL);
     /*
      * Print task list for debug */
     //  Buffer to hold task list (large enough to fit output)

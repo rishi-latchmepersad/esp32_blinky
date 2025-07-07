@@ -26,6 +26,8 @@
     "**/requirements{/**,*}.{txt,in}": "pip-requirements",
     "esp_log.h": "c",
     "sdkconfig.h": "c",
-    "filesystem": "cpp"
-  }
+    "filesystem": "cpp",
+    "gpio.h": "c"
+  },
+  "C_Cpp.errorSquiggles": "enabled"
 }
