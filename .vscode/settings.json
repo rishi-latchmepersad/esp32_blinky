@@ -27,7 +27,9 @@
     "esp_log.h": "c",
     "sdkconfig.h": "c",
     "filesystem": "cpp",
-    "gpio.h": "c"
+    "gpio.h": "c",
+    "esp_system.h": "c",
+    "esp_attr.h": "c"
   },
-  "C_Cpp.errorSquiggles": "enabled"
+  "C_Cpp.intelliSenseEngine": "default"
 }

@@ -14,9 +14,11 @@
 #include "led_strip.h"
 #include "sdkconfig.h"
 #include "freertos/semphr.h"
+#include "esp_attr.h"
 
 static const char *TAG = "example";
 SemaphoreHandle_t led_semaphore;
+SemaphoreHandle_t button_semaphore;
 /* Use project configuration menu (idf.py menuconfig) to choose the GPIO to blink,
    or you can edit the following line and set a number here.
 */
@@ -146,25 +148,56 @@ void blink_led_blue_task(void *pvParameters)
     }
 }
 
-void button_task(void *pvParameters)
+void IRAM_ATTR gpio_isr_handler(void *arg)
 {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    // Signal the task
+    xSemaphoreGiveFromISR(button_semaphore, &xHigherPriorityTaskWoken);
+
+    // Perform a context switch if needed
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+void button_task(void *pvParameter)
+{
+    while (1)
+    {
+        if (xSemaphoreTake(button_semaphore, portMAX_DELAY))
+        {
+            // Debounce
+            vTaskDelay(pdMS_TO_TICKS(150));
+
+            // Only accept input if still low (confirmed press)
+            if (gpio_get_level(GPIO_NUM_9) == 0)
+            {
+                ESP_LOGI(TAG, "Button pressed");
+            }
+        }
+    }
+}
+
+void set_up_button()
+{
+    button_semaphore = xSemaphoreCreateBinary();
+    if (button_semaphore == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to create semaphore");
+        return;
+    }
+
+    xTaskCreate(button_task, "button_task", 2048, NULL, 6, NULL);
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << GPIO_NUM_9),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE};
+        .intr_type = GPIO_INTR_NEGEDGE};
     gpio_config(&io_conf);
-
-    while (1)
-    {
-        int level = gpio_get_level(GPIO_NUM_9);
-        if (level == 0)
-        { // button is pressed
-            ESP_LOGI(TAG, "Button pressed!");
-        }
-        vTaskDelay(150 / portTICK_PERIOD_MS); // debounce delay
-    }
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(GPIO_NUM_9, gpio_isr_handler, NULL);
+    gpio_intr_enable(GPIO_NUM_9);
+    ESP_LOGI(TAG, "Button configured for interrupt!");
 }
 
 void app_main(void)
@@ -180,7 +213,7 @@ void app_main(void)
     configure_led();
     xTaskCreate(blink_led_white_task, "blink_led_white_task", 2048, NULL, 1, NULL);
     xTaskCreate(blink_led_blue_task, "blink_led_blue_task", 2048, NULL, 1, NULL);
-    xTaskCreate(button_task, "button_task", 2048, NULL, 1, NULL);
+    set_up_button();
     /*
      * Print task list for debug */
     //  Buffer to hold task list (large enough to fit output)
