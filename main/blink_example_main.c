@@ -19,13 +19,32 @@
 static const char *TAG = "example";
 SemaphoreHandle_t led_semaphore;
 SemaphoreHandle_t button_semaphore;
+static uint8_t s_led_state = 0;
+
+typedef struct
+{
+    uint8_t index;
+    char name[32];
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+} LEDColour;
+
+static LEDColour led_colours[] = {
+    {0, "red", 5, 0, 0},
+    {1, "green", 0, 5, 0},
+    {2, "blue", 0, 0, 5},
+    {3, "yellow", 5, 5, 0},
+    {4, "magenta", 5, 0, 5},
+    {5, "cyan", 0, 5, 5},
+    {6, "white", 5, 5, 5},
+};
+
+uint8_t led_colour_index = 0;
 /* Use project configuration menu (idf.py menuconfig) to choose the GPIO to blink,
    or you can edit the following line and set a number here.
 */
 #define BLINK_GPIO CONFIG_BLINK_GPIO
-
-static uint8_t s_white_led_state = 0;
-static uint8_t s_blue_led_state = 0;
 
 #ifdef CONFIG_BLINK_LED_STRIP
 
@@ -78,14 +97,14 @@ static void configure_led(void)
 #error "unsupported LED type"
 #endif
 
-void blink_white_led()
+void blink_led()
 {
-    ESP_LOGI(TAG, "Turning the white LED %s!", s_white_led_state == true ? "ON" : "OFF");
+    ESP_LOGI(TAG, "Turning the LED %s!", s_led_state == true ? "ON" : "OFF");
     /* If the addressable LED is enabled */
-    if (s_white_led_state)
+    if (s_led_state)
     {
         /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
-        led_strip_set_pixel(led_strip, 0, 5, 5, 5);
+        led_strip_set_pixel(led_strip, 0, led_colours[led_colour_index].red, led_colours[led_colour_index].green, led_colours[led_colour_index].blue);
         /* Refresh the strip to send data */
         led_strip_refresh(led_strip);
     }
@@ -95,56 +114,21 @@ void blink_white_led()
         led_strip_clear(led_strip);
     }
     /* Toggle the LED state */
-    s_white_led_state = !s_white_led_state;
+    s_led_state = !s_led_state;
 }
 
-void blink_blue_led()
+void blink_led_task(void *pvParameters)
 {
-    /* If the addressable LED is enabled */
-    if (s_blue_led_state)
-    {
-        /* Set the LED pixel using RGB from 0 (0%) to 255 (100%) for each color */
-        led_strip_set_pixel(led_strip, 0, 0, 0, 5);
-        /* Refresh the strip to send data */
-        led_strip_refresh(led_strip);
-    }
-    else
-    {
-        /* Set all LED off to clear all pixels */
-        led_strip_clear(led_strip);
-    }
-    /* Toggle the LED state */
-    s_blue_led_state = !s_blue_led_state;
-}
-void blink_led_white_task(void *pvParameters)
-{
-    ESP_LOGI(TAG, "Starting the blink led white task!");
+    ESP_LOGI(TAG, "Starting the blink led task!");
     while (1)
     {
         xSemaphoreTake(led_semaphore, portMAX_DELAY);
-        blink_white_led();
+        blink_led();
         vTaskDelay(1000 / portTICK_PERIOD_MS);
-        blink_white_led();
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        xSemaphoreGive(led_semaphore);
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-    }
-}
-
-void blink_led_blue_task(void *pvParameters)
-{
-    ESP_LOGI(TAG, "Starting the blink led blue task!");
-
-    while (1)
-    {
-        ESP_LOGI(TAG, "Turning the blue LED %s!", s_blue_led_state == true ? "ON" : "OFF");
-        xSemaphoreTake(led_semaphore, portMAX_DELAY);
-        blink_blue_led();
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        blink_blue_led();
+        blink_led();
         vTaskDelay(1000 / portTICK_PERIOD_MS);
         xSemaphoreGive(led_semaphore);
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 }
 
@@ -172,6 +156,10 @@ void button_task(void *pvParameter)
             if (gpio_get_level(GPIO_NUM_9) == 0)
             {
                 ESP_LOGI(TAG, "Button pressed");
+                xSemaphoreTake(led_semaphore, portMAX_DELAY);
+                led_colour_index = (led_colour_index + 1) % 7;
+                ESP_LOGI(TAG, "Changing colour to: %s", led_colours[led_colour_index].name);
+                xSemaphoreGive(led_semaphore);
             }
         }
     }
@@ -182,7 +170,7 @@ void set_up_button()
     button_semaphore = xSemaphoreCreateBinary();
     if (button_semaphore == NULL)
     {
-        ESP_LOGE(TAG, "Failed to create semaphore");
+        ESP_LOGE(TAG, "Failed to create semaphore for button.");
         return;
     }
 
@@ -211,8 +199,7 @@ void app_main(void)
     xSemaphoreGive(led_semaphore);
     /* Configure the peripheral according to the LED type */
     configure_led();
-    xTaskCreate(blink_led_white_task, "blink_led_white_task", 2048, NULL, 1, NULL);
-    xTaskCreate(blink_led_blue_task, "blink_led_blue_task", 2048, NULL, 1, NULL);
+    xTaskCreate(blink_led_task, "blink_led_task", 2048, NULL, 1, NULL);
     set_up_button();
     /*
      * Print task list for debug */
